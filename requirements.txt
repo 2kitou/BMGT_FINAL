@@ -3,3 +3,4 @@ gspread==5.8.0
 google-auth==2.24.0
 python-dotenv==1.0.0
 flask-cors==3.0.10
+gunicorn
