@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Qtime - Queue Job System</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="bg-gray-50 text-gray-800 font-inter overflow-y-auto">
+  <div class="max-w-lg mx-auto py-10 px-6 space-y-10">
+    
+    <!-- HEADER -->
+    <header class="text-center space-y-2">
+      <img src="{{ url_for('static', filename='qtime.jpg') }}" 
+           alt="Qtime Logo" 
+           class="w-28 h-28 mx-auto rounded-xl shadow-sm">
+      <p class="text-gray-500 text-sm italic">LESS LINES – MORE LIFE</p>
+      <p class="text-gray-400 text-xs">A Smart Queue Job System for Everyday Tasks</p>
+    </header>
+
+    <!-- Create Job -->
+    <section class="bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+      <h2 class="text-xl font-semibold mb-5 text-blue-700 text-center">Create a New Job</h2>
+      <form id="jobForm" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Customer Name</label>
+          <input class="input" name="customer_name" placeholder="Enter your full name" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+          <input class="input" name="customer_phone" placeholder="Enter your phone number" required>
+          <p class="text-xs text-gray-400 mt-1">Your info will be hidden until someone accepts the job.</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Date & Time</label>
+          <input class="input" name="dateTime" type="datetime-local" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Job Description</label>
+          <textarea class="input" name="description" rows="2" placeholder="Ex: Order 1 meal at VGU Canteen" required></textarea>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Cost (VND)</label>
+          <input class="input" name="costVND" type="number" placeholder="Between 5,000 – 10,000" required>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+          <input class="input" name="note" placeholder="Additional details (optional)">
+        </div>
+        <button type="submit" class="btn-primary w-full mt-4">Post Job</button>
+      </form>
+    </section>
+
+    <!-- Available Jobs -->
+    <section class="bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+      <h2 class="text-xl font-semibold mb-4 text-green-700">Available Jobs</h2>
+      <div id="availableJobs" class="space-y-4 text-sm"></div>
+    </section>
+
+    <!-- In Progress -->
+    <section class="bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+      <h2 class="text-xl font-semibold mb-4 text-yellow-700">In-Progress Jobs</h2>
+      <div id="inProgressJobs" class="space-y-4 text-sm"></div>
+    </section>
+
+    <!-- Completed Jobs -->
+    <section class="bg-white shadow-md rounded-2xl p-6 border border-gray-100">
+      <h2 class="text-xl font-semibold mb-4 text-gray-400">Completed Jobs</h2>
+      <div id="completedJobs" class="space-y-4 text-sm"></div>
+    </section>
+  </div>
+
+  <!-- Accept Modal -->
+  <div id="acceptModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div class="bg-white p-6 rounded-xl w-80 relative shadow-lg">
+      <h3 class="text-lg font-semibold mb-4 text-center text-blue-700">Accept Job</h3>
+      <input id="waiter_name" class="input mb-3" placeholder="Your Name">
+      <input id="waiter_phone" class="input mb-5" placeholder="Your Phone Number">
+      <div class="flex justify-end gap-3">
+        <button id="cancelAccept" class="btn-secondary">Cancel</button>
+        <button id="confirmAccept" class="btn-primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
