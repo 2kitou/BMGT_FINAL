@@ -4,26 +4,31 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import uuid
 import os
+import json
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
 # ---------- CONFIG ----------
-SERVICE_ACCOUNT_FILE = os.path.join('credentials', 'credentials.json')
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
 
-# Your Google Sheet URL
+# ---------- GOOGLE SHEET AUTH ----------
+SERVICE_ACCOUNT_JSON = os.environ.get("credentials.json")  # secret in Render
+if not SERVICE_ACCOUNT_JSON:
+    raise Exception("Google credentials not set in environment variable.")
+
+creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
+
+# Your Google Sheet URL (keep this in code, not secret)
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1HP_5ikAvDYe98PoaNjQdLDG-10BI_PoH6kxqrrhqOKg/edit?usp=sharing"
 
-# ---------- CONNECT TO GOOGLE SHEET ----------
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 client = gspread.authorize(creds)
 spreadsheet = client.open_by_url(SHEET_URL)
 worksheet = spreadsheet.sheet1
 
-# ---------- HEADERS ----------
+# ---------- SHEET HEADERS ----------
 SHEET_HEADERS = [
     "id", "customer_name", "customer_phone", "dateTime", "description",
     "costVND", "costUSD", "note", "status",
@@ -41,13 +46,11 @@ ensure_headers()
 
 # ---------- HELPERS ----------
 def get_all_jobs():
-    """Return all job records from the sheet."""
     return worksheet.get_all_records()
 
 def find_row_by_id(job_id):
-    """Find the row number (2-based) for a given job ID."""
     records = worksheet.get_all_records()
-    for i, row in enumerate(records, start=2):  # skip header
+    for i, row in enumerate(records, start=2):
         if str(row["id"]) == str(job_id):
             return i
     return None
@@ -59,12 +62,10 @@ def home():
 
 @app.route('/api/jobs', methods=['GET'])
 def get_jobs():
-    """Return all jobs (for both available & in-progress)."""
     return jsonify(get_all_jobs())
 
 @app.route('/api/submit', methods=['POST'])
 def submit_job():
-    """Create a new job (customer posting)."""
     data = request.get_json()
     required_fields = ["customer_name", "customer_phone", "dateTime", "description", "costVND"]
 
@@ -91,10 +92,8 @@ def submit_job():
     worksheet.append_row(new_row)
     return jsonify({"message": "Job added successfully!"}), 200
 
-
 @app.route('/api/accept', methods=['POST'])
 def accept_job():
-    """Waiter accepts a job."""
     try:
         data = request.get_json()
         job_id = data.get("id")
@@ -109,14 +108,13 @@ def accept_job():
             return jsonify({"error": "Job not found"}), 404
 
         records = worksheet.get_all_records()
-        job = records[row_number - 2]  # adjust for header
+        job = records[row_number - 2]
 
         if job["status"] != "AVAILABLE":
             return jsonify({"error": "Job is not available"}), 400
 
         accepted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # ✅ FIX: use update_acell() to avoid APIError
         worksheet.update_acell(f"I{row_number}", "IN_PROGRESS")      # status
         worksheet.update_acell(f"J{row_number}", waiter_name)        # waiter_name
         worksheet.update_acell(f"K{row_number}", waiter_phone)       # waiter_phone
@@ -129,10 +127,8 @@ def accept_job():
         print("Error accepting job:", e)
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/api/complete', methods=['POST'])
 def complete_job():
-    """Mark job as completed."""
     try:
         data = request.get_json()
         job_id = data.get("id")
@@ -150,6 +146,6 @@ def complete_job():
         print("Error completing job:", e)
         return jsonify({"error": str(e)}), 500
 
-
 if __name__ == "__main__":
-    app.run(debug=True)
+    # For local development
+    app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
