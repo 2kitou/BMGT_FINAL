@@ -4,7 +4,6 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import uuid
 import os
-import json
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
@@ -15,13 +14,18 @@ SCOPES = [
 ]
 
 # ---------- GOOGLE SHEET AUTH ----------
-SERVICE_ACCOUNT_JSON = os.environ.get("credentials.json")  # secret in Render
-if not SERVICE_ACCOUNT_JSON:
-    raise Exception("Google credentials not set in environment variable.")
+# Render secret file path
+SERVICE_ACCOUNT_FILE = "/etc/secrets/credentials.json"
 
-creds = Credentials.from_service_account_info(json.loads(SERVICE_ACCOUNT_JSON), scopes=SCOPES)
+# For local development, you can uncomment this line:
+# SERVICE_ACCOUNT_FILE = os.path.join('credentials', 'credentials.json')
 
-# Your Google Sheet URL (keep this in code, not secret)
+if not os.path.exists(SERVICE_ACCOUNT_FILE):
+    raise Exception("Google credentials secret file not found.")
+
+creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+# Your Google Sheet URL (not secret)
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1HP_5ikAvDYe98PoaNjQdLDG-10BI_PoH6kxqrrhqOKg/edit?usp=sharing"
 
 client = gspread.authorize(creds)
@@ -50,7 +54,7 @@ def get_all_jobs():
 
 def find_row_by_id(job_id):
     records = worksheet.get_all_records()
-    for i, row in enumerate(records, start=2):
+    for i, row in enumerate(records, start=2):  # skip header
         if str(row["id"]) == str(job_id):
             return i
     return None
@@ -147,5 +151,4 @@ def complete_job():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    # For local development
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
