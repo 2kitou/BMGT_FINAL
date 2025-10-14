@@ -86,3 +86,7 @@ label {
   border-color: #cbd5e1;
   transform: translateY(-2px);
 }
+
+.star { transition: color 0.12s ease; color: #d1d5db; }
+.star.text-yellow-400 { color: #f59e0b; }
+
