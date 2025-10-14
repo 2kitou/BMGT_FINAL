@@ -187,6 +187,30 @@ def accept_job():
         print("Error accepting job:", e)
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/cancel_job', methods=['POST'])
+def cancel_job():
+    try:
+        job_id = request.json.get('id')
+        if not job_id:
+            return jsonify({"error": "Missing job ID"}), 400
+
+        sheet = get_sheet()
+        records = sheet.get_all_records()
+
+        for i, record in enumerate(records, start=2):  # start=2 because row 1 = header
+            if record['id'] == job_id:
+                if record['status'] != 'AVAILABLE':
+                    return jsonify({"error": "Cannot cancel — job already accepted"}), 400
+                sheet.update_cell(i, record.keys().index('status') + 1, 'CANCELLED')
+                sheet.update_cell(i, record.keys().index('cancel_time') + 1, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                return jsonify({"message": "Job cancelled successfully"}), 200
+
+        return jsonify({"error": "Job not found"}), 404
+
+    except Exception as e:
+        print("Error cancelling job:", e)
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/complete', methods=['POST'])
 def complete_job():
