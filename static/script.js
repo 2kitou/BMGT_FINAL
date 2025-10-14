@@ -122,15 +122,37 @@ document.addEventListener("DOMContentLoaded", () => {
   btn.className = "btn-primary w-full mt-3";
 
   if (job.status === "AVAILABLE") {
-    btn.textContent = "Accept Job";
-    btn.onclick = () => openAcceptModal(job.id);
+    const btnContainer = document.createElement("div");
+    btnContainer.className = "flex gap-2";
+
+    const acceptBtn = document.createElement("button");
+    acceptBtn.className = "btn-primary flex-1";
+    acceptBtn.textContent = "Accept Job";
+    acceptBtn.onclick = () => openAcceptModal(job.id);
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.className = "btn-danger flex-1 bg-red-500 text-white rounded px-3 py-2";
+    cancelBtn.textContent = "Cancel Job";
+    cancelBtn.onclick = () => cancelJob(job.id);
+
+    btnContainer.appendChild(acceptBtn);
+    btnContainer.appendChild(cancelBtn);
+    div.appendChild(btnContainer);
+    return div;
   } else if (job.status === "IN_PROGRESS") {
     btn.textContent = "Mark as Done";
     btn.onclick = () => openFeedbackModal(job.id);
+    div.appendChild(btn);
+  } else if (job.status === "CANCELLED") {
+    btn.textContent = "Cancelled";
+    btn.disabled = true;
+    btn.classList.add("opacity-60", "bg-gray-400");
+    div.appendChild(btn);
   } else {
     btn.textContent = "Completed";
     btn.disabled = true;
     btn.classList.add("opacity-60");
+    div.appendChild(btn);
   }
 
   div.appendChild(btn);
@@ -244,5 +266,28 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  function cancelJob(jobId) {
+  if (!confirm("Are you sure you want to cancel this job?")) return;
+
+  fetch("/api/cancel_job", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id: jobId }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.error) {
+        alert(data.error);
+      } else {
+        alert("Job cancelled successfully.");
+        loadJobs();
+      }
+    })
+    .catch(err => {
+      console.error("Cancel job error:", err);
+      alert("Failed to cancel job.");
+    });
+}
+  
   loadJobs();
 });
