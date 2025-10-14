@@ -151,11 +151,12 @@ def accept_job():
 
         accepted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        worksheet.update_acell(f"I{row_number}", "IN_PROGRESS")
-        worksheet.update_acell(f"J{row_number}", waiter_name)
-        worksheet.update_acell(f"K{row_number}", waiter_phone)
-        worksheet.update_acell(f"L{row_number}", str(uuid.uuid4()))
-        worksheet.update_acell(f"N{row_number}", accepted_time)
+        worksheet.update_acell(f"J{row_number}", "IN_PROGRESS")  # status
+        worksheet.update_acell(f"K{row_number}", waiter_name)    # waiter_name
+        worksheet.update_acell(f"L{row_number}", waiter_phone)   # waiter_phone
+        worksheet.update_acell(f"M{row_number}", str(uuid.uuid4()))  # accepterId
+        worksheet.update_acell(f"O{row_number}", accepted_time)  # acceptedAt
+
 
         return jsonify({"message": "Job accepted successfully!"}), 200
 
