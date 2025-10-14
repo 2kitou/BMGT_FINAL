@@ -152,11 +152,10 @@ def accept_job():
         accepted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         worksheet.update_acell(f"J{row_number}", "IN_PROGRESS")  # status
-        worksheet.update_acell(f"K{row_number}", waiter_name)    # waiter_name
-        worksheet.update_acell(f"L{row_number}", waiter_phone)   # waiter_phone
+        worksheet.update_acell(f"K{row_number}", waiter_name)
+        worksheet.update_acell(f"L{row_number}", waiter_phone)
         worksheet.update_acell(f"M{row_number}", str(uuid.uuid4()))  # accepterId
-        worksheet.update_acell(f"O{row_number}", accepted_time)  # acceptedAt
-
+        worksheet.update_acell(f"O{row_number}", accepted_time)
 
         return jsonify({"message": "Job accepted successfully!"}), 200
 
@@ -179,26 +178,26 @@ def complete_job():
 
         completed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        worksheet.update_acell(f"I{row_number}", "COMPLETED")
-        worksheet.update_acell(f"O{row_number}", completed_time)
+        # ✅ Correct columns
+        worksheet.update_acell(f"J{row_number}", "COMPLETED")  # status
+        worksheet.update_acell(f"P{row_number}", completed_time)  # completedAt
 
         if rating is not None:
             try:
                 r = int(rating)
                 if 1 <= r <= 5:
-                    worksheet.update_acell(f"P{row_number}", str(r))
+                    worksheet.update_acell(f"Q{row_number}", str(r))  # rating
             except Exception:
                 pass
 
         if feedback:
-            worksheet.update_acell(f"Q{row_number}", str(feedback))
+            worksheet.update_acell(f"R{row_number}", str(feedback))  # feedback
 
         return jsonify({"message": "Job marked as completed!"}), 200
 
     except Exception as e:
         print("Error completing job:", e)
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
