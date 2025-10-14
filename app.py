@@ -190,25 +190,29 @@ def accept_job():
 @app.route('/api/cancel_job', methods=['POST'])
 def cancel_job():
     try:
-        job_id = request.json.get('id')
+        data = request.get_json() or {}
+        job_id = data.get('id')
         if not job_id:
             return jsonify({"error": "Missing job ID"}), 400
 
-        sheet = get_sheet()
-        records = sheet.get_all_records()
+        records = worksheet.get_all_records()
 
-        for i, record in enumerate(records, start=2):  # start=2 because row 1 = header
-            if record['id'] == job_id:
-                if record['status'] != 'AVAILABLE':
+        for i, record in enumerate(records, start=2):  # skip header row
+            if str(record.get("id")) == str(job_id):
+                # Only cancel if still AVAILABLE
+                if record.get("status") != "AVAILABLE":
                     return jsonify({"error": "Cannot cancel — job already accepted"}), 400
-                sheet.update_cell(i, record.keys().index('status') + 1, 'CANCELLED')
-                sheet.update_cell(i, record.keys().index('cancel_time') + 1, datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+                cancelled_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                worksheet.update_acell(f"J{i}", "CANCELLED")  # status
+                worksheet.update_acell(f"P{i}", cancelled_time)  # completedAt
+                worksheet.update_acell(f"I{i}", "Cancelled by customer")  # note column
                 return jsonify({"message": "Job cancelled successfully"}), 200
 
         return jsonify({"error": "Job not found"}), 404
 
     except Exception as e:
-        print("Error cancelling job:", e)
+        print("❌ Cancel job error:", e)
         return jsonify({"error": str(e)}), 500
 
 
