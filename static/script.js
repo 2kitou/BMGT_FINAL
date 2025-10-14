@@ -73,53 +73,69 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   function createJobCard(job) {
-    const div = document.createElement("div");
-    div.className = "job-card";
+  const div = document.createElement("div");
+  div.className = "job-card";
 
-    const qty = job.quantity ? ` × ${job.quantity}` : "";
-    const customerInfo = job.status === "AVAILABLE"
-      ? `<p class="text-gray-400 italic">Customer info hidden until accepted</p>`
-      : `<p><strong>Customer:</strong> ${job.customer_name}</p><p><strong>Phone:</strong> ${job.customer_phone}</p>`;
+  const qty = job.quantity ? ` × ${job.quantity}` : "";
 
-    const ratingHtml = job.rating
-      ? `<p><strong>Rating:</strong> ${"⭐".repeat(Number(job.rating))} (${job.rating})</p><p class="text-sm italic">${job.feedback || ""}</p>`
-      : "";
+  let customerInfo = "";
+  let workerInfo = "";
 
-    div.innerHTML = `
-      <h3 class="text-lg mb-1">${job.description}${qty}</h3>
-      ${customerInfo}
-      <p><strong>Time:</strong> ${job.dateTime || ""}</p>
-      <p><strong>Cost:</strong> ${job.costVND} VND (~$${job.costUSD})</p>
-      ${job.note ? `<p><strong>Note:</strong> ${job.note}</p>` : ""}
-      <p><strong>Status:</strong> <span class="font-medium ${
-        job.status === "AVAILABLE"
-          ? "text-green-600"
-          : job.status === "IN_PROGRESS"
-          ? "text-yellow-600"
-          : "text-gray-500"
-      }">${job.status}</span></p>
-      ${ratingHtml}
+  if (job.status === "AVAILABLE") {
+    customerInfo = `<p class="text-gray-400 italic">Customer info hidden until accepted</p>`;
+  } else {
+    customerInfo = `
+      <p><strong>Customer:</strong> ${job.customer_name}</p>
+      <p><strong>Phone:</strong> ${job.customer_phone}</p>
     `;
-
-    const btn = document.createElement("button");
-    btn.className = "btn-primary w-full mt-3";
-
-    if (job.status === "AVAILABLE") {
-      btn.textContent = "Accept Job";
-      btn.onclick = () => openAcceptModal(job.id);
-    } else if (job.status === "IN_PROGRESS") {
-      btn.textContent = "Mark as Done";
-      btn.onclick = () => openFeedbackModal(job.id);
-    } else {
-      btn.textContent = "Completed";
-      btn.disabled = true;
-      btn.classList.add("opacity-60");
-    }
-
-    div.appendChild(btn);
-    return div;
   }
 
+  if (job.status !== "AVAILABLE" && job.waiter_name) {
+    workerInfo = `
+      <p><strong>Worker:</strong> ${job.waiter_name}</p>
+      <p><strong>Phone:</strong> ${job.waiter_phone}</p>
+    `;
+  }
+
+  const ratingHtml = job.rating
+    ? `<p><strong>Rating:</strong> ${"⭐".repeat(Number(job.rating))} (${job.rating})</p><p class="text-sm italic">${job.feedback || ""}</p>`
+    : "";
+
+  div.innerHTML = `
+    <h3 class="text-lg mb-1">${job.description}${qty}</h3>
+    ${customerInfo}
+    ${workerInfo}
+    <p><strong>Time:</strong> ${job.dateTime || ""}</p>
+    <p><strong>Cost:</strong> ${job.costVND} VND (~$${job.costUSD})</p>
+    ${job.note ? `<p><strong>Note:</strong> ${job.note}</p>` : ""}
+    <p><strong>Status:</strong> <span class="font-medium ${
+      job.status === "AVAILABLE"
+        ? "text-green-600"
+        : job.status === "IN_PROGRESS"
+        ? "text-yellow-600"
+        : "text-gray-500"
+    }">${job.status}</span></p>
+    ${ratingHtml}
+  `;
+
+  const btn = document.createElement("button");
+  btn.className = "btn-primary w-full mt-3";
+
+  if (job.status === "AVAILABLE") {
+    btn.textContent = "Accept Job";
+    btn.onclick = () => openAcceptModal(job.id);
+  } else if (job.status === "IN_PROGRESS") {
+    btn.textContent = "Mark as Done";
+    btn.onclick = () => openFeedbackModal(job.id);
+  } else {
+    btn.textContent = "Completed";
+    btn.disabled = true;
+    btn.classList.add("opacity-60");
+  }
+
+  div.appendChild(btn);
+  return div;
+}
   // ---------- SUBMIT ----------
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
