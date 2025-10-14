@@ -84,48 +84,61 @@ def get_jobs():
 
 @app.route('/api/submit', methods=['POST'])
 def submit_job():
-    data = request.get_json() or {}
-    required_fields = ["customer_name", "customer_phone", "dateTime", "description"]
-
-    if not all(field in data and data[field] for field in required_fields):
-        return jsonify({"error": "Missing required fields"}), 400
-
-    # Quantity (default = 1)
     try:
-        quantity = int(data.get("quantity", 1))
-        if quantity < 1:
-            return jsonify({"error": "Quantity must be ≥ 1"}), 400
-    except Exception:
-        return jsonify({"error": "Invalid quantity"}), 400
+        data = request.get_json() or {}
+        required_fields = ["customer_name", "customer_phone", "dateTime", "description"]
 
-    # Compute total cost in VND and USD
-    cost_vnd = PER_ITEM_COST_VND * quantity
-    cost_usd = format(cost_vnd / VND_TO_USD_RATE, ".2f")
+        # --- Validate ---
+        if not all(field in data and data[field] for field in required_fields):
+            return jsonify({"error": "Missing required fields"}), 400
 
-    job_id = str(uuid.uuid4())
-    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # --- Quantity ---
+        try:
+            quantity = int(data.get("quantity", 1))
+            if quantity < 1:
+                return jsonify({"error": "Quantity must be ≥ 1"}), 400
+        except Exception:
+            return jsonify({"error": "Invalid quantity"}), 400
 
-    new_row = [
-        job_id,
-        data.get("customer_name", ""),
-        data.get("customer_phone", ""),
-        data.get("dateTime", ""),
-        data.get("description", ""),
-        quantity,
-        cost_vnd,
-        cost_usd,
-        data.get("note", ""),
-        "AVAILABLE",
-        "", "", "", created_at, "", "", "", ""
-    ]
+        # --- Compute cost ---
+        cost_vnd = PER_ITEM_COST_VND * quantity
+        cost_usd = format(cost_vnd / VND_TO_USD_RATE, ".2f")
 
-    worksheet.append_row(new_row, value_input_option='USER_ENTERED')
-    return jsonify({
-        "message": "Job added successfully!",
-        "id": job_id,
-        "costVND": cost_vnd,
-        "costUSD": cost_usd
-    }), 200
+        # --- Build row ---
+        job_id = str(uuid.uuid4())
+        created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        new_row = [
+            job_id,
+            data.get("customer_name", ""),
+            data.get("customer_phone", ""),
+            data.get("dateTime", ""),
+            data.get("description", ""),
+            quantity,
+            cost_vnd,
+            cost_usd,
+            data.get("note", ""),
+            "AVAILABLE",
+            "", "", "", created_at, "", "", "", ""
+        ]
+
+        # --- Try appending to Google Sheets (with auto-retry) ---
+        try:
+            worksheet.append_row(new_row, value_input_option='USER_ENTERED')
+        except Exception as e:
+            print("⚠️ First attempt failed, retrying after 3s:", e)
+            time.sleep(3)
+            worksheet.append_row(new_row, value_input_option='USER_ENTERED')
+
+        return jsonify({
+            "message": "Job added successfully!",
+            "id": job_id,
+            "costVND": cost_vnd,
+            "costUSD": cost_usd
+        }), 200
+
+    except Exception as e:
+        print("❌ Error submitting job:", e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/accept', methods=['POST'])
