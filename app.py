@@ -13,28 +13,32 @@ SCOPES = [
     'https://www.googleapis.com/auth/drive'
 ]
 
+# Path to service account JSON
 SERVICE_ACCOUNT_FILE = "/etc/secrets/credentials.json"
 if not os.path.exists(SERVICE_ACCOUNT_FILE):
     raise Exception("Google credentials secret file not found.")
 
-VND_TO_USD_RATE = 24000.0  # Conversion rate
-PER_ITEM_MIN = 5000
-PER_ITEM_MAX = 10000
+# ---------- PRICE + CONVERSION ----------
+# Rule: 1 quantity = 5000 VND = 0.20 USD
+VND_TO_USD_RATE = 25000.0  # 1 USD = 25,000 VND
+PER_ITEM_COST_VND = 5000
+PER_ITEM_COST_USD = 0.20
 
+# ---------- GOOGLE SHEET SETUP ----------
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-
-# ---------- GOOGLE SHEET ----------
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1HP_5ikAvDYe98PoaNjQdLDG-10BI_PoH6kxqrrhqOKg/edit?usp=sharing"
 client = gspread.authorize(creds)
 spreadsheet = client.open_by_url(SHEET_URL)
 worksheet = spreadsheet.sheet1
 
+# ---------- SHEET HEADERS ----------
 SHEET_HEADERS = [
     "id", "customer_name", "customer_phone", "dateTime", "description",
     "quantity", "costVND", "costUSD", "note", "status",
     "waiter_name", "waiter_phone", "accepterId",
     "createdAt", "acceptedAt", "completedAt", "rating", "feedback"
 ]
+
 
 def ensure_headers():
     first_row = worksheet.row_values(1)
@@ -45,23 +49,28 @@ def ensure_headers():
             pass
         worksheet.insert_row(SHEET_HEADERS, 1)
 
+
 ensure_headers()
+
 
 # ---------- HELPERS ----------
 def get_all_jobs():
     return worksheet.get_all_records()
 
+
 def find_row_by_id(job_id):
     records = worksheet.get_all_records()
-    for i, row in enumerate(records, start=2):
+    for i, row in enumerate(records, start=2):  # skip header
         if str(row.get("id")) == str(job_id):
             return i
     return None
+
 
 # ---------- ROUTES ----------
 @app.route('/')
 def home():
     return render_template('index.html')
+
 
 @app.route('/api/jobs', methods=['GET'])
 def get_jobs():
@@ -72,57 +81,52 @@ def get_jobs():
             job['customer_phone'] = 'Hidden until accepted'
     return jsonify(records), 200
 
+
 @app.route('/api/submit', methods=['POST'])
 def submit_job():
     data = request.get_json() or {}
-    required = ["customer_name", "customer_phone", "dateTime", "description", "costVND"]
+    required_fields = ["customer_name", "customer_phone", "dateTime", "description"]
 
-    if not all(field in data and data[field] for field in required):
+    if not all(field in data and data[field] for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
-    # Quantity
+    # Quantity (default = 1)
     try:
         quantity = int(data.get("quantity", 1))
         if quantity < 1:
-            return jsonify({"error": "Quantity must be >= 1"}), 400
+            return jsonify({"error": "Quantity must be ≥ 1"}), 400
     except Exception:
         return jsonify({"error": "Invalid quantity"}), 400
 
-    # Cost
-    try:
-        cost_vnd = int(data["costVND"])
-    except Exception:
-        return jsonify({"error": "Invalid costVND"}), 400
+    # Compute total cost in VND and USD
+    cost_vnd = PER_ITEM_COST_VND * quantity
+    cost_usd = format(cost_vnd / VND_TO_USD_RATE, ".2f")
 
-    min_total = PER_ITEM_MIN * quantity
-    max_total = PER_ITEM_MAX * quantity
-    if not (min_total <= cost_vnd <= max_total):
-        return jsonify({
-            "error": f"Total cost must be between {min_total:,} and {max_total:,} VND for quantity {quantity}."
-        }), 400
-
-    cost_usd = round(cost_vnd / VND_TO_USD_RATE, 2)
     job_id = str(uuid.uuid4())
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     new_row = [
-        job_id,  # A
-        data.get("customer_name", ""),  # B
-        data.get("customer_phone", ""),  # C
-        data.get("dateTime", ""),  # D
-        data.get("description", ""),  # E
-        quantity,  # F
-        cost_vnd,  # G
-        cost_usd,  # H
-        data.get("note", ""),  # I
-        "AVAILABLE",  # J
-        "", "", "",  # K, L, M
-        created_at,  # N
-        "", "", "", ""  # O, P, Q, R
+        job_id,
+        data.get("customer_name", ""),
+        data.get("customer_phone", ""),
+        data.get("dateTime", ""),
+        data.get("description", ""),
+        quantity,
+        cost_vnd,
+        cost_usd,
+        data.get("note", ""),
+        "AVAILABLE",
+        "", "", "", created_at, "", "", "", ""
     ]
 
     worksheet.append_row(new_row, value_input_option='USER_ENTERED')
-    return jsonify({"message": "Job added successfully!", "id": job_id}), 200
+    return jsonify({
+        "message": "Job added successfully!",
+        "id": job_id,
+        "costVND": cost_vnd,
+        "costUSD": cost_usd
+    }), 200
+
 
 @app.route('/api/accept', methods=['POST'])
 def accept_job():
@@ -141,22 +145,24 @@ def accept_job():
 
         records = worksheet.get_all_records()
         job = records[row_number - 2]
+
         if job.get("status") != "AVAILABLE":
             return jsonify({"error": "Job is not available"}), 400
 
         accepted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        worksheet.update_acell(f"J{row_number}", "IN_PROGRESS")  # status
-        worksheet.update_acell(f"K{row_number}", waiter_name)     # waiter_name
-        worksheet.update_acell(f"L{row_number}", waiter_phone)    # waiter_phone
-        worksheet.update_acell(f"M{row_number}", str(uuid.uuid4()))  # accepterId
-        worksheet.update_acell(f"O{row_number}", accepted_time)   # acceptedAt
+        worksheet.update_acell(f"I{row_number}", "IN_PROGRESS")
+        worksheet.update_acell(f"J{row_number}", waiter_name)
+        worksheet.update_acell(f"K{row_number}", waiter_phone)
+        worksheet.update_acell(f"L{row_number}", str(uuid.uuid4()))
+        worksheet.update_acell(f"N{row_number}", accepted_time)
 
         return jsonify({"message": "Job accepted successfully!"}), 200
 
     except Exception as e:
         print("Error accepting job:", e)
         return jsonify({"error": str(e)}), 500
+
 
 @app.route('/api/complete', methods=['POST'])
 def complete_job():
@@ -172,19 +178,19 @@ def complete_job():
 
         completed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        worksheet.update_acell(f"J{row_number}", "COMPLETED")  # status
-        worksheet.update_acell(f"P{row_number}", completed_time)  # completedAt
+        worksheet.update_acell(f"I{row_number}", "COMPLETED")
+        worksheet.update_acell(f"O{row_number}", completed_time)
 
-        if rating:
+        if rating is not None:
             try:
                 r = int(rating)
                 if 1 <= r <= 5:
-                    worksheet.update_acell(f"Q{row_number}", str(r))
+                    worksheet.update_acell(f"P{row_number}", str(r))
             except Exception:
                 pass
 
         if feedback:
-            worksheet.update_acell(f"R{row_number}", feedback)
+            worksheet.update_acell(f"Q{row_number}", str(feedback))
 
         return jsonify({"message": "Job marked as completed!"}), 200
 
@@ -192,6 +198,6 @@ def complete_job():
         print("Error completing job:", e)
         return jsonify({"error": str(e)}), 500
 
-# ---------- MAIN ----------
+
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
