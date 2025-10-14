@@ -12,32 +12,21 @@ SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/drive'
 ]
-
-# ---------- GOOGLE SHEET AUTH ----------
-# Render secret file path
 SERVICE_ACCOUNT_FILE = "/etc/secrets/credentials.json"
-
-# For local development, you can uncomment this line:
-# SERVICE_ACCOUNT_FILE = os.path.join('credentials', 'credentials.json')
-
 if not os.path.exists(SERVICE_ACCOUNT_FILE):
     raise Exception("Google credentials secret file not found.")
-
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 
-# Your Google Sheet URL (not secret)
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1HP_5ikAvDYe98PoaNjQdLDG-10BI_PoH6kxqrrhqOKg/edit?usp=sharing"
-
 client = gspread.authorize(creds)
 spreadsheet = client.open_by_url(SHEET_URL)
 worksheet = spreadsheet.sheet1
 
 # ---------- SHEET HEADERS ----------
 SHEET_HEADERS = [
-    "id", "customer_name", "customer_phone", "dateTime", "description",
-    "costVND", "costUSD", "note", "status",
-    "waiter_name", "waiter_phone", "accepterId",
-    "createdAt", "acceptedAt", "completedAt"
+    "id", "customer_name", "customer_phone", "dateTime", "description", "costVND",
+    "costUSD", "note", "status", "waiter_name", "waiter_phone", "accepterId",
+    "createdAt", "acceptedAt", "completedAt", "rating", "feedback"
 ]
 
 def ensure_headers():
@@ -45,7 +34,6 @@ def ensure_headers():
     if first_row != SHEET_HEADERS:
         worksheet.delete_rows(1)
         worksheet.insert_row(SHEET_HEADERS, 1)
-
 ensure_headers()
 
 # ---------- HELPERS ----------
@@ -54,7 +42,7 @@ def get_all_jobs():
 
 def find_row_by_id(job_id):
     records = worksheet.get_all_records()
-    for i, row in enumerate(records, start=2):  # skip header
+    for i, row in enumerate(records, start=2):
         if str(row["id"]) == str(job_id):
             return i
     return None
@@ -72,7 +60,6 @@ def get_jobs():
 def submit_job():
     data = request.get_json()
     required_fields = ["customer_name", "customer_phone", "dateTime", "description", "costVND"]
-
     if not all(field in data and data[field] for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
@@ -90,9 +77,8 @@ def submit_job():
     new_row = [
         job_id, data["customer_name"], data["customer_phone"], data["dateTime"],
         data["description"], cost_vnd, cost_usd, data.get("note", ""), "AVAILABLE",
-        "", "", "", created_at, "", ""
+        "", "", "", created_at, "", "", "", ""
     ]
-
     worksheet.append_row(new_row)
     return jsonify({"message": "Job added successfully!"}), 200
 
@@ -113,20 +99,18 @@ def accept_job():
 
         records = worksheet.get_all_records()
         job = records[row_number - 2]
-
         if job["status"] != "AVAILABLE":
             return jsonify({"error": "Job is not available"}), 400
 
         accepted_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        worksheet.update_acell(f"I{row_number}", "IN_PROGRESS")      # status
-        worksheet.update_acell(f"J{row_number}", waiter_name)        # waiter_name
-        worksheet.update_acell(f"K{row_number}", waiter_phone)       # waiter_phone
-        worksheet.update_acell(f"L{row_number}", str(uuid.uuid4()))  # accepterId
-        worksheet.update_acell(f"N{row_number}", accepted_time)      # acceptedAt
+        worksheet.update_acell(f"I{row_number}", "IN_PROGRESS")
+        worksheet.update_acell(f"J{row_number}", waiter_name)
+        worksheet.update_acell(f"K{row_number}", waiter_phone)
+        worksheet.update_acell(f"L{row_number}", str(uuid.uuid4()))
+        worksheet.update_acell(f"N{row_number}", accepted_time)
 
         return jsonify({"message": "Job accepted successfully!"}), 200
-
     except Exception as e:
         print("Error accepting job:", e)
         return jsonify({"error": str(e)}), 500
@@ -136,16 +120,23 @@ def complete_job():
     try:
         data = request.get_json()
         job_id = data.get("id")
+        rating = data.get("rating")
+        feedback = data.get("feedback", "")
         row_number = find_row_by_id(job_id)
+
         if not row_number:
             return jsonify({"error": "Job not found"}), 404
 
         completed_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        worksheet.update_acell(f"I{row_number}", "COMPLETED")   # status
-        worksheet.update_acell(f"O{row_number}", completed_time)  # completedAt
 
-        return jsonify({"message": "Job marked as completed!"}), 200
+        worksheet.update_acell(f"I{row_number}", "COMPLETED")
+        worksheet.update_acell(f"O{row_number}", completed_time)
+        if rating:
+            worksheet.update_acell(f"P{row_number}", rating)
+        if feedback:
+            worksheet.update_acell(f"Q{row_number}", feedback)
 
+        return jsonify({"message": "Job marked as completed with feedback!"}), 200
     except Exception as e:
         print("Error completing job:", e)
         return jsonify({"error": str(e)}), 500
