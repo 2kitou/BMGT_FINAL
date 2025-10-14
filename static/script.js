@@ -3,6 +3,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const availableJobs = document.getElementById("availableJobs");
   const inProgressJobs = document.getElementById("inProgressJobs");
   const completedJobs = document.getElementById("completedJobs");
+
   const acceptModal = document.getElementById("acceptModal");
   const confirmAccept = document.getElementById("confirmAccept");
   const cancelAccept = document.getElementById("cancelAccept");
@@ -10,68 +11,67 @@ document.addEventListener("DOMContentLoaded", () => {
   const feedbackModal = document.getElementById("feedbackModal");
   const confirmFeedback = document.getElementById("confirmFeedback");
   const cancelFeedback = document.getElementById("cancelFeedback");
+  const stars = document.querySelectorAll(".star");
+  const feedbackText = document.getElementById("feedbackText");
 
   let currentJobId = null;
   let currentRating = 0;
 
   async function loadJobs() {
-    const res = await fetch("/api/jobs");
-    const jobs = await res.json();
-    availableJobs.innerHTML = "";
-    inProgressJobs.innerHTML = "";
-    completedJobs.innerHTML = "";
+    try {
+      const res = await fetch("/api/jobs");
+      const jobs = await res.json();
 
-    jobs.forEach((job) => {
-      if (job.status === "AVAILABLE") availableJobs.appendChild(createJobCard(job, "available"));
-      else if (job.status === "IN_PROGRESS") inProgressJobs.appendChild(createJobCard(job, "inProgress"));
-      else if (job.status === "COMPLETED") completedJobs.appendChild(createJobCard(job, "completed"));
-    });
+      availableJobs.innerHTML = "";
+      inProgressJobs.innerHTML = "";
+      completedJobs.innerHTML = "";
+
+      jobs.forEach(job => {
+        const q = Number(job.quantity || 1);
+        const card = createJobCard(job);
+        if (job.status === "AVAILABLE") availableJobs.appendChild(card);
+        else if (job.status === "IN_PROGRESS") inProgressJobs.appendChild(card);
+        else completedJobs.appendChild(card);
+      });
+    } catch (err) {
+      console.error("Error loading jobs:", err);
+    }
   }
 
-  function createJobCard(job, type) {
+  function createJobCard(job) {
     const div = document.createElement("div");
     div.className = "job-card";
 
-    const customerInfo =
-      type === "available"
-        ? `<p class="text-gray-400 italic">Customer info hidden until accepted</p>`
-        : `<p><strong>Customer:</strong> ${job.customer_name}</p><p><strong>Phone:</strong> ${job.customer_phone}</p>`;
+    const qty = job.quantity ? ` x ${job.quantity}` : "";
+    const customerInfo = job.status === "AVAILABLE"
+      ? `<p class="text-gray-400 italic">Customer info hidden until accepted</p>`
+      : `<p><strong>Customer:</strong> ${job.customer_name}</p><p><strong>Phone:</strong> ${job.customer_phone}</p>`;
 
-    const waiterInfo = job.waiter_name
-      ? `<p><strong>Waiter:</strong> ${job.waiter_name}</p><p><strong>Phone:</strong> ${job.waiter_phone}</p>`
-      : "";
+    const ratingHtml = job.rating ? `<p><strong>Rating:</strong> ${"⭐".repeat(Number(job.rating))} (${job.rating})</p><p class="text-sm italic">${job.feedback || ""}</p>` : "";
 
     div.innerHTML = `
-      <h3 class="text-lg mb-1">${job.description}</h3>
+      <h3 class="text-lg mb-1">${job.description}${qty}</h3>
       ${customerInfo}
-      <p><strong>Time:</strong> ${job.dateTime}</p>
+      <p><strong>Time:</strong> ${job.dateTime || ""}</p>
       <p><strong>Cost:</strong> ${job.costVND} VND (~$${job.costUSD})</p>
       ${job.note ? `<p><strong>Note:</strong> ${job.note}</p>` : ""}
-      <p><strong>Status:</strong> 
-        <span class="font-medium ${
-          job.status === "AVAILABLE"
-            ? "text-green-600"
-            : job.status === "IN_PROGRESS"
-            ? "text-yellow-600"
-            : "text-gray-500"
-        }">${job.status}</span>
-      </p>
-      ${waiterInfo}
-      ${job.rating ? `<p><strong>Rating:</strong> ⭐ ${job.rating}</p><p><em>${job.feedback}</em></p>` : ""}
+      <p><strong>Status:</strong> <span class="font-medium ${job.status === "AVAILABLE" ? "text-green-600" : job.status === "IN_PROGRESS" ? "text-yellow-600" : "text-gray-500"}">${job.status}</span></p>
+      ${ratingHtml}
     `;
 
     const btn = document.createElement("button");
     btn.className = "btn-primary w-full mt-3";
-    if (type === "available") {
+
+    if (job.status === "AVAILABLE") {
       btn.textContent = "Accept Job";
       btn.onclick = () => openAcceptModal(job.id);
-    } else if (type === "inProgress") {
+    } else if (job.status === "IN_PROGRESS") {
       btn.textContent = "Mark as Done";
       btn.onclick = () => openFeedbackModal(job.id);
     } else {
       btn.textContent = "Completed";
       btn.disabled = true;
-      btn.classList.add("opacity-50");
+      btn.classList.add("opacity-60");
     }
 
     div.appendChild(btn);
@@ -81,63 +81,116 @@ document.addEventListener("DOMContentLoaded", () => {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
-    const res = await fetch("/api/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await res.json();
-    alert(result.message || result.error);
-    form.reset();
-    loadJobs();
+
+    // Ensure quantity is integer >=1
+    data.quantity = Number(data.quantity || 1);
+    if (!Number.isInteger(data.quantity) || data.quantity < 1) {
+      return alert("Quantity must be a positive integer.");
+    }
+
+    // Validate total cost against per-item rules (frontend check)
+    const totalCost = Number(data.costVND);
+    const perItemMin = 5000;
+    const perItemMax = 10000;
+    const minTotal = perItemMin * data.quantity;
+    const maxTotal = perItemMax * data.quantity;
+    if (isNaN(totalCost) || totalCost < minTotal || totalCost > maxTotal) {
+      return alert(`Total cost must be between ${minTotal.toLocaleString()} and ${maxTotal.toLocaleString()} VND for quantity ${data.quantity}.`);
+    }
+
+    try {
+      const res = await fetch("/api/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      alert(result.message || result.error);
+      form.reset();
+      loadJobs();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to submit job.");
+    }
   });
 
   function openAcceptModal(id) {
     currentJobId = id;
     acceptModal.classList.remove("hidden");
+    document.getElementById("waiter_name").value = "";
+    document.getElementById("waiter_phone").value = "";
   }
-  cancelAccept.addEventListener("click", () => acceptModal.classList.add("hidden"));
+
+  cancelAccept.addEventListener("click", () => {
+    acceptModal.classList.add("hidden");
+    currentJobId = null;
+  });
+
   confirmAccept.addEventListener("click", async () => {
     const waiter_name = document.getElementById("waiter_name").value.trim();
     const waiter_phone = document.getElementById("waiter_phone").value.trim();
-    if (!waiter_name || !waiter_phone) return alert("Please fill all fields");
-    const res = await fetch("/api/accept", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: currentJobId, waiter_name, waiter_phone }),
-    });
-    const result = await res.json();
-    alert(result.message || result.error);
-    acceptModal.classList.add("hidden");
-    loadJobs();
+    if (!waiter_name || !waiter_phone) return alert("Please enter name and phone.");
+
+    try {
+      const res = await fetch("/api/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: currentJobId, waiter_name, waiter_phone })
+      });
+      const result = await res.json();
+      alert(result.message || result.error);
+      acceptModal.classList.add("hidden");
+      loadJobs();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to accept job.");
+    }
   });
 
+  // ---------- Feedback / Rating ----------
   function openFeedbackModal(id) {
     currentJobId = id;
+    currentRating = 0;
+    feedbackText.value = "";
+    stars.forEach(s => s.classList.remove("text-yellow-400"));
     feedbackModal.classList.remove("hidden");
   }
-  cancelFeedback.addEventListener("click", () => feedbackModal.classList.add("hidden"));
 
-  document.querySelectorAll(".star").forEach((star, index) => {
+  cancelFeedback.addEventListener("click", () => {
+    feedbackModal.classList.add("hidden");
+    currentJobId = null;
+    currentRating = 0;
+  });
+
+  stars.forEach((star) => {
     star.addEventListener("click", () => {
-      currentRating = index + 1;
-      document.querySelectorAll(".star").forEach((s, i) => {
-        s.classList.toggle("text-yellow-400", i < currentRating);
+      const val = Number(star.getAttribute("data-value"));
+      currentRating = val;
+      stars.forEach(s => {
+        const v = Number(s.getAttribute("data-value"));
+        s.classList.toggle("text-yellow-400", v <= val);
       });
     });
   });
 
   confirmFeedback.addEventListener("click", async () => {
-    const feedback = document.getElementById("feedback_text").value.trim();
-    const res = await fetch("/api/complete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: currentJobId, rating: currentRating, feedback }),
-    });
-    const data = await res.json();
-    alert(data.message || data.error);
-    feedbackModal.classList.add("hidden");
-    loadJobs();
+    const feedback = feedbackText.value.trim();
+    try {
+      const res = await fetch("/api/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: currentJobId, rating: currentRating || null, feedback })
+      });
+      const data = await res.json();
+      alert(data.message || data.error);
+      feedbackModal.classList.add("hidden");
+      currentJobId = null;
+      currentRating = 0;
+      loadJobs();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to submit feedback.");
+    }
   });
 
   loadJobs();
