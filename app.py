@@ -76,9 +76,20 @@ def home():
 def get_jobs():
     records = get_all_jobs()
     for job in records:
-        if job.get('status') == 'AVAILABLE':
+        status = job.get('status')
+
+        # hide customer info only when job is still available
+        if status == 'AVAILABLE':
             job['customer_name'] = 'Hidden until accepted'
             job['customer_phone'] = 'Hidden until accepted'
+            job['waiter_name'] = ''
+            job['waiter_phone'] = ''
+        elif status == 'IN_PROGRESS':
+            # show both customer and worker info
+            pass
+        elif status == 'COMPLETED':
+            # show everything including rating + feedback
+            pass
     return jsonify(records), 200
 
 
