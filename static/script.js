@@ -17,6 +17,41 @@ document.addEventListener("DOMContentLoaded", () => {
   let currentJobId = null;
   let currentRating = 0;
 
+  // ---------- COST LOGIC ----------
+  const VND_PER_ITEM = 5000;
+  const USD_PER_ITEM = 0.20;
+  let currentCurrency = "VND";
+
+  const quantityInput = document.getElementById("quantityInput");
+  const costDisplay = document.getElementById("costDisplay");
+  const costVNDHidden = document.getElementById("costVND");
+  const toggleCurrencyBtn = document.getElementById("toggleCurrency");
+
+  function updateCost() {
+    const qty = Number(quantityInput.value) || 1;
+    const totalVND = qty * VND_PER_ITEM;
+    const totalUSD = qty * USD_PER_ITEM;
+
+    if (currentCurrency === "VND") {
+      costDisplay.value = `${totalVND.toLocaleString()} VND`;
+    } else {
+      costDisplay.value = `$${totalUSD.toFixed(2)} USD`;
+    }
+
+    costVNDHidden.value = totalVND; // backend always receives VND
+  }
+
+  quantityInput.addEventListener("input", updateCost);
+
+  toggleCurrencyBtn.addEventListener("click", () => {
+    currentCurrency = currentCurrency === "VND" ? "USD" : "VND";
+    toggleCurrencyBtn.textContent = currentCurrency;
+    updateCost();
+  });
+
+  updateCost(); // initialize
+  // ---------- END COST LOGIC ----------
+
   async function loadJobs() {
     try {
       const res = await fetch("/api/jobs");
@@ -27,7 +62,6 @@ document.addEventListener("DOMContentLoaded", () => {
       completedJobs.innerHTML = "";
 
       jobs.forEach(job => {
-        const q = Number(job.quantity || 1);
         const card = createJobCard(job);
         if (job.status === "AVAILABLE") availableJobs.appendChild(card);
         else if (job.status === "IN_PROGRESS") inProgressJobs.appendChild(card);
@@ -42,12 +76,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const div = document.createElement("div");
     div.className = "job-card";
 
-    const qty = job.quantity ? ` x ${job.quantity}` : "";
+    const qty = job.quantity ? ` × ${job.quantity}` : "";
     const customerInfo = job.status === "AVAILABLE"
       ? `<p class="text-gray-400 italic">Customer info hidden until accepted</p>`
       : `<p><strong>Customer:</strong> ${job.customer_name}</p><p><strong>Phone:</strong> ${job.customer_phone}</p>`;
 
-    const ratingHtml = job.rating ? `<p><strong>Rating:</strong> ${"⭐".repeat(Number(job.rating))} (${job.rating})</p><p class="text-sm italic">${job.feedback || ""}</p>` : "";
+    const ratingHtml = job.rating
+      ? `<p><strong>Rating:</strong> ${"⭐".repeat(Number(job.rating))} (${job.rating})</p><p class="text-sm italic">${job.feedback || ""}</p>`
+      : "";
 
     div.innerHTML = `
       <h3 class="text-lg mb-1">${job.description}${qty}</h3>
@@ -55,7 +91,13 @@ document.addEventListener("DOMContentLoaded", () => {
       <p><strong>Time:</strong> ${job.dateTime || ""}</p>
       <p><strong>Cost:</strong> ${job.costVND} VND (~$${job.costUSD})</p>
       ${job.note ? `<p><strong>Note:</strong> ${job.note}</p>` : ""}
-      <p><strong>Status:</strong> <span class="font-medium ${job.status === "AVAILABLE" ? "text-green-600" : job.status === "IN_PROGRESS" ? "text-yellow-600" : "text-gray-500"}">${job.status}</span></p>
+      <p><strong>Status:</strong> <span class="font-medium ${
+        job.status === "AVAILABLE"
+          ? "text-green-600"
+          : job.status === "IN_PROGRESS"
+          ? "text-yellow-600"
+          : "text-gray-500"
+      }">${job.status}</span></p>
       ${ratingHtml}
     `;
 
@@ -78,24 +120,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return div;
   }
 
+  // ---------- SUBMIT ----------
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
 
-    // Ensure quantity is integer >=1
+    // ensure quantity integer >= 1
     data.quantity = Number(data.quantity || 1);
     if (!Number.isInteger(data.quantity) || data.quantity < 1) {
       return alert("Quantity must be a positive integer.");
-    }
-
-    // Validate total cost against per-item rules (frontend check)
-    const totalCost = Number(data.costVND);
-    const perItemMin = 5000;
-    const perItemMax = 10000;
-    const minTotal = perItemMin * data.quantity;
-    const maxTotal = perItemMax * data.quantity;
-    if (isNaN(totalCost) || totalCost < minTotal || totalCost > maxTotal) {
-      return alert(`Total cost must be between ${minTotal.toLocaleString()} and ${maxTotal.toLocaleString()} VND for quantity ${data.quantity}.`);
     }
 
     try {
@@ -107,6 +140,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await res.json();
       alert(result.message || result.error);
       form.reset();
+      updateCost();
       loadJobs();
     } catch (err) {
       console.error(err);
@@ -114,6 +148,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  // ---------- ACCEPT ----------
   function openAcceptModal(id) {
     currentJobId = id;
     acceptModal.classList.remove("hidden");
@@ -147,7 +182,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ---------- Feedback / Rating ----------
+  // ---------- FEEDBACK ----------
   function openFeedbackModal(id) {
     currentJobId = id;
     currentRating = 0;
@@ -162,7 +197,7 @@ document.addEventListener("DOMContentLoaded", () => {
     currentRating = 0;
   });
 
-  stars.forEach((star) => {
+  stars.forEach(star => {
     star.addEventListener("click", () => {
       const val = Number(star.getAttribute("data-value"));
       currentRating = val;
