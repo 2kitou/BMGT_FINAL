@@ -121,24 +121,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const btn = document.createElement("button");
   btn.className = "btn-primary w-full mt-3";
 
-  if (job.status === "AVAILABLE") {
-    const btnContainer = document.createElement("div");
-    btnContainer.className = "flex gap-2";
+ if (job.status === "AVAILABLE") {
+  const acceptBtn = document.createElement("button");
+  acceptBtn.className = "btn-primary w-full";
+  acceptBtn.textContent = "Accept Job";
+  acceptBtn.onclick = () => openAcceptModal(job.id);
+  div.appendChild(acceptBtn);
+  return div;
+} else if (job.status === "IN_PROGRESS") {
+  const btnContainer = document.createElement("div");
+  btnContainer.className = "flex gap-2";
 
-    const acceptBtn = document.createElement("button");
-    acceptBtn.className = "btn-primary flex-1";
-    acceptBtn.textContent = "Accept Job";
-    acceptBtn.onclick = () => openAcceptModal(job.id);
+  const doneBtn = document.createElement("button");
+  doneBtn.className = "btn-primary flex-1";
+  doneBtn.textContent = "Mark as Done";
+  doneBtn.onclick = () => openFeedbackModal(job.id);
 
-    const cancelBtn = document.createElement("button");
-    cancelBtn.className = "btn-danger flex-1 bg-red-500 text-white rounded px-3 py-2";
-    cancelBtn.textContent = "Cancel Job";
-    cancelBtn.onclick = () => cancelJob(job.id);
+  const cancelBtn = document.createElement("button");
+  cancelBtn.className = "btn-danger flex-1 bg-red-500 text-white rounded px-3 py-2";
+  cancelBtn.textContent = "Cancel Job";
+  cancelBtn.onclick = () => cancelJob(job.id);
 
-    btnContainer.appendChild(acceptBtn);
-    btnContainer.appendChild(cancelBtn);
-    div.appendChild(btnContainer);
-    return div;
+  btnContainer.appendChild(doneBtn);
+  btnContainer.appendChild(cancelBtn);
+  div.appendChild(btnContainer);
+  return div;
   } else if (job.status === "IN_PROGRESS") {
     btn.textContent = "Mark as Done";
     btn.onclick = () => openFeedbackModal(job.id);
