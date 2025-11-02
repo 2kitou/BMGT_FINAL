@@ -199,14 +199,16 @@ def cancel_job():
 
         for i, record in enumerate(records, start=2):  # skip header row
             if str(record.get("id")) == str(job_id):
-                # Only cancel if still AVAILABLE
-                if record.get("status") != "AVAILABLE":
-                    return jsonify({"error": "Cannot cancel — job already accepted"}), 400
+                status = record.get("status")
+
+                # ✅ only allow cancel if job is IN_PROGRESS
+                if status != "IN_PROGRESS":
+                    return jsonify({"error": "Cannot cancel — only in-progress jobs can be cancelled"}), 400
 
                 cancelled_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 worksheet.update_acell(f"J{i}", "CANCELLED")  # status
                 worksheet.update_acell(f"P{i}", cancelled_time)  # completedAt
-                worksheet.update_acell(f"I{i}", "Cancelled by customer")  # note column
+                worksheet.update_acell(f"I{i}", "Cancelled by worker while in progress")  # note column
                 return jsonify({"message": "Job cancelled successfully"}), 200
 
         return jsonify({"error": "Job not found"}), 404
